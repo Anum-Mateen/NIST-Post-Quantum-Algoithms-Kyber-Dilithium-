@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PQC Benchmark — Kyber vs Dilithium</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Lora:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --kyber:#0d9488;   --kyber-l:rgba(13,148,136,0.13);  --kyber-t:#2dd4bf;
+  --dil:#d97706;     --dil-l:rgba(217,119,6,0.13);     --dil-t:#fbbf24;
+  --bg:#0e0e0c; --s1:#141412; --s2:#1b1b18; --s3:#222220;
+  --border:rgba(255,255,255,0.065); --border2:rgba(255,255,255,0.12);
+  --text:#f0ede6; --text2:#9a9580; --text3:#504d44;
+  --accent:#e8c547; --accent-l:rgba(232,197,71,0.12);
+  --red:#e05a4a; --green:#5ab585;
+  --rad:8px; --rad2:12px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+html{scroll-behavior:smooth;}
+body{
+  font-family:'Lora',Georgia,serif;
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* noise texture overlay */
+body::after{
+  content:'';position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;opacity:.35;
+}
+
+/* horizontal rule pattern */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:repeating-linear-gradient(0deg,rgba(232,197,71,.018) 0px,transparent 1px,transparent 56px);
+  pointer-events:none;z-index:0;
+}
+
+.z{position:relative;z-index:1;}
+.wrap{max-width:1100px;margin:0 auto;padding:0 32px;}
+
+/* ── NAV ── */
+nav{
+  position:sticky;top:0;z-index:200;
+  background:rgba(14,14,12,.92);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:52px;gap:16px;}
+.nav-logo{
+  font-family:'Syne',sans-serif;
+  font-size:13px;font-weight:700;
+  color:var(--accent);
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
+.nav-links{display:flex;gap:28px;}
+.nav-links a{
+  font-family:'Syne',sans-serif;
+  font-size:12px;font-weight:500;
+  color:var(--text2);text-decoration:none;
+  letter-spacing:.04em;text-transform:uppercase;
+  transition:color .18s;
+}
+.nav-links a:hover{color:var(--text);}
+.nav-right{display:flex;align-items:center;gap:10px;}
+
+.status-pill{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 12px;border-radius:100px;
+  border:1px solid var(--border2);
+  font-size:11px;font-family:'JetBrains Mono',monospace;
+  color:var(--text2);white-space:nowrap;
+}
+.status-dot{width:6px;height:6px;border-radius:50%;background:var(--text3);}
+.status-dot.ok{background:var(--green);}
+.status-dot.running{background:var(--accent);animation:blink 1s infinite;}
+.status-dot.err{background:var(--red);}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
+
+.refresh-ring{width:18px;height:18px;position:relative;flex-shrink:0;}
+.refresh-ring svg{width:100%;height:100%;transform:rotate(-90deg);}
+.refresh-ring circle{fill:none;stroke:var(--border2);stroke-width:2;}
+.refresh-ring .arc{stroke:var(--accent);stroke-width:2;stroke-dasharray:50.3;stroke-dashoffset:50.3;transition:stroke-dashoffset linear;}
+
+/* ── HERO ── */
+.hero{padding:72px 0 48px;}
+.hero-tag{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--accent-l);
+  border:1px solid rgba(232,197,71,.28);
+  border-radius:4px;
+  padding:4px 14px;
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  color:var(--accent);letter-spacing:.1em;
+  text-transform:uppercase;margin-bottom:28px;
+}
+.pulse{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 2s infinite;}
+h1{
+  font-family:'Syne',sans-serif;
+  font-size:clamp(30px,5vw,54px);
+  font-weight:800;
+  letter-spacing:-.04em;
+  line-height:1.08;
+  margin-bottom:18px;
+}
+h1 em{
+  font-style:italic;
+  font-family:'Lora',serif;
+  font-weight:400;
+  color:var(--accent);
+}
+.hero-sub{
+  font-family:'Lora',serif;
+  font-size:16px;font-weight:400;font-style:italic;
+  color:var(--text2);
+  max-width:520px;
+  line-height:1.7;
+  margin-bottom:36px;
+}
+
+/* ── CONTROL PANEL ── */
+.control-panel{
+  background:var(--s1);
+  border:1px solid var(--border);
+  border-left:3px solid var(--accent);
+  border-radius:var(--rad2);
+  padding:22px 26px;
+  margin-bottom:44px;
+  display:flex;align-items:center;gap:22px;flex-wrap:wrap;
+}
+.cp-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;color:var(--text3);
+  letter-spacing:.08em;text-transform:uppercase;
+  margin-bottom:7px;
+}
+.runs-group{display:flex;flex-direction:column;}
+.runs-input-row{display:flex;align-items:center;gap:10px;}
+.runs-input{
+  background:var(--s3);border:1px solid var(--border2);
+  border-radius:6px;color:var(--text);
+  font-size:15px;font-family:'JetBrains Mono',monospace;
+  padding:7px 13px;width:88px;outline:none;
+  transition:border-color .2s;
+}
+.runs-input:focus{border-color:var(--accent);}
+.runs-presets{display:flex;gap:5px;}
+.preset-btn{
+  background:transparent;border:1px solid var(--border);
+  border-radius:5px;color:var(--text2);
+  font-size:11px;font-family:'JetBrains Mono',monospace;
+  padding:4px 9px;cursor:pointer;transition:all .15s;
+}
+.preset-btn:hover,.preset-btn.active{
+  background:var(--s3);border-color:var(--accent);
+  color:var(--accent);
+}
+.run-btn{
+  background:var(--accent);border:none;border-radius:7px;
+  color:#0e0e0c;font-size:13px;font-weight:700;
+  font-family:'Syne',sans-serif;letter-spacing:.04em;
+  padding:10px 24px;cursor:pointer;transition:all .18s;
+  white-space:nowrap;flex-shrink:0;text-transform:uppercase;
+}
+.run-btn:hover{background:#f0cf5c;transform:translateY(-1px);}
+.run-btn:active{transform:translateY(0);}
+.run-btn:disabled{background:var(--s3);color:var(--text3);cursor:not-allowed;transform:none;}
+.cp-divider{width:1px;height:44px;background:var(--border);flex-shrink:0;}
+.last-run-info{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;line-height:1.7;}
+.last-run-info span{color:var(--text2);}
+
+/* ── PROGRESS ── */
+.progress-wrap{display:none;margin-bottom:28px;background:var(--s1);border:1px solid var(--border);border-radius:var(--rad);padding:16px 20px;}
+.progress-wrap.visible{display:block;}
+.progress-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:13px;}
+.progress-title{font-family:'Syne',sans-serif;font-weight:600;font-size:13px;}
+.progress-pct{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text2);}
+.progress-track{background:var(--s3);border-radius:3px;height:5px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--kyber),var(--accent));border-radius:3px;transition:width .4s ease;}
+.progress-log{margin-top:12px;max-height:90px;overflow-y:auto;font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text2);line-height:1.7;}
+
+/* ── SECTION ── */
+section{padding:56px 0;}
+.section-label{
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px;color:var(--accent);
+  letter-spacing:.12em;text-transform:uppercase;
+  margin-bottom:6px;
+}
+h2{
+  font-family:'Syne',sans-serif;
+  font-size:clamp(20px,2.5vw,30px);
+  font-weight:700;letter-spacing:-.03em;
+  margin-bottom:8px;
+}
+.section-desc{
+  font-size:14px;font-style:italic;
+  color:var(--text2);margin-bottom:32px;
+  line-height:1.7;max-width:560px;
+}
+.divider{height:1px;background:var(--border);}
+
+/* ── METRIC CARDS ── */
+.metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:32px;}
+.mc{
+  background:var(--s1);border:1px solid var(--border);
+  border-radius:var(--rad);padding:16px 18px;
+  position:relative;overflow:hidden;
+  transition:border-color .2s,transform .2s;
+}
+.mc:hover{border-color:var(--border2);transform:translateY(-2px);}
+.mc::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.mc.k::after{background:linear-gradient(90deg,var(--kyber),transparent);}
+.mc.d::after{background:linear-gradient(90deg,var(--dil),transparent);}
+.mc-label{font-size:9px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:8px;letter-spacing:.06em;text-transform:uppercase;}
+.mc-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;line-height:1;margin-bottom:4px;}
+.mc-val.k{color:var(--kyber-t);}
+.mc-val.d{color:var(--dil-t);}
+.mc-sub{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;}
+.mc-val.loading{color:var(--text3);font-size:18px;}
+
+/* ── CHART CARD ── */
+.cc{background:var(--s1);border:1px solid var(--border);border-radius:var(--rad2);padding:24px;margin-bottom:16px;}
+.cc-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:600;margin-bottom:3px;}
+.cc-sub{font-size:12px;font-style:italic;color:var(--text2);margin-bottom:18px;}
+.legend{display:flex;gap:18px;margin-bottom:16px;flex-wrap:wrap;}
+.li{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text2);font-style:italic;}
+.ls{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:640px){.charts-row{grid-template-columns:1fr;}}
+
+/* ── SIZE TABLE ── */
+.size-table{width:100%;border-collapse:collapse;}
+.size-table th{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--text3);font-weight:400;padding:0 0 12px;text-align:left;letter-spacing:.06em;text-transform:uppercase;}
+.size-table td{padding:9px 0;border-top:1px solid var(--border);font-size:13px;vertical-align:middle;}
+.bar-bg{background:rgba(255,255,255,.04);border-radius:2px;height:5px;overflow:hidden;min-width:60px;}
+.bar-fill{height:100%;border-radius:2px;transition:width 1s ease;}
+.mono{font-family:'JetBrains Mono',monospace;font-size:11px;}
+
+/* ── COMPARISON TABLE ── */
+.cmp-table{width:100%;border-collapse:collapse;}
+.cmp-table thead th{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--text3);font-weight:400;padding:0 0 12px;text-align:left;letter-spacing:.06em;text-transform:uppercase;}
+.cmp-table thead th:not(:first-child){text-align:center;}
+.cmp-table td{padding:11px 0;border-top:1px solid var(--border);font-size:13px;color:var(--text2);}
+.cmp-table td:not(:first-child){text-align:center;}
+.cmp-table td:first-child{font-family:'Syne',sans-serif;font-weight:600;font-size:13px;color:var(--text);}
+.badge{display:inline-block;padding:3px 9px;border-radius:3px;font-size:10px;font-family:'JetBrains Mono',monospace;}
+.b-fast{background:rgba(90,181,133,.1);color:#5ab585;}
+.b-slow{background:rgba(224,90,74,.1);color:#e05a4a;}
+.b-sm{background:rgba(13,148,136,.1);color:#2dd4bf;}
+.b-lg{background:rgba(217,119,6,.1);color:#fbbf24;}
+.b-ok{background:rgba(232,197,71,.1);color:var(--accent);}
+
+/* ── ANALYSIS ── */
+.ag{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;}
+.ac{background:var(--s1);border:1px solid var(--border);border-radius:var(--rad);padding:20px;}
+.ac-icon{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:16px;margin-bottom:12px;}
+.ac h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;margin-bottom:6px;letter-spacing:-.01em;}
+.ac p{font-size:12px;font-style:italic;color:var(--text2);line-height:1.7;}
+
+/* ── ALGO CARDS ── */
+.algo-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px;}
+@media(max-width:640px){.algo-grid{grid-template-columns:1fr;}}
+.algo-card{background:var(--s1);border:1px solid var(--border);border-radius:var(--rad2);padding:24px;}
+.algo-name{font-family:'Syne',sans-serif;font-size:17px;font-weight:800;margin-bottom:2px;letter-spacing:-.02em;}
+.algo-type{font-size:11px;font-style:italic;color:var(--text2);margin-bottom:18px;}
+.step{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid var(--border);font-size:13px;font-style:italic;color:var(--text2);}
+.step:first-of-type{border-top:none;padding-top:0;}
+.snum{width:20px;height:20px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-family:'JetBrains Mono',monospace;flex-shrink:0;margin-top:2px;}
+.snum.k{background:rgba(13,148,136,.2);color:#2dd4bf;}
+.snum.d{background:rgba(217,119,6,.2);color:#fbbf24;}
+
+/* ── FOOTER ── */
+footer{border-top:1px solid var(--border);padding:24px 0;text-align:center;}
+footer p{font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text3);}
+footer span{color:var(--text2);}
+
+/* ── ERROR ── */
+.err-banner{background:rgba(224,90,74,.09);border:1px solid rgba(224,90,74,.22);border-radius:var(--rad);padding:12px 16px;font-size:13px;color:#e05a4a;margin-bottom:20px;display:none;}
+.err-banner.visible{display:block;}
+
+/* ── NO DATA ── */
+.no-data{text-align:center;padding:64px 20px;color:var(--text2);}
+.no-data .nd-icon{font-size:38px;margin-bottom:16px;}
+.no-data h3{font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:8px;}
+.no-data p{font-size:13px;font-style:italic;line-height:1.7;max-width:400px;margin:0 auto;}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="z">
+  <div class="wrap">
+    <div class="nav-logo">PQC · Benchmark</div>
+    <div class="nav-links">
+      <a href="#overview">Overview</a>
+      <a href="#performance">Performance</a>
+      <a href="#algorithms">Algorithms</a>
+      <a href="#comparison">Comparison</a>
+    </div>
+    <div class="nav-right">
+      <div class="refresh-ring" id="refreshRing" title="Auto-refresh every 5s">
+        <svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="7.5"/><circle class="arc" cx="9" cy="9" r="7.5" id="arcEl"/></svg>
+      </div>
+      <div class="status-pill">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Connecting…</span>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="wrap z">
+  <div class="hero">
+    <div class="hero-tag"><span class="pulse"></span>Live data · Auto-refreshes every 5 s</div>
+    <h1>Post-Quantum Cryptography<br><em>Live Benchmark Dashboard</em></h1>
+    <p class="hero-sub">Real results from your C++ benchmark. Adjust runs, click Run, and every chart updates automatically.</p>
+  </div>
+
+  <!-- CONTROL PANEL -->
+  <div class="control-panel">
+    <div class="runs-group">
+      <div class="cp-label">Number of Runs</div>
+      <div class="runs-input-row">
+        <input class="runs-input" id="runsInput" type="number" min="1" max="500" value="50"/>
+        <div class="runs-presets">
+          <button class="preset-btn" onclick="setRuns(2)">2</button>
+          <button class="preset-btn active" onclick="setRuns(10)">10</button>
+          <button class="preset-btn" onclick="setRuns(50)">50</button>
+          <button class="preset-btn" onclick="setRuns(100)">100</button>
+        </div>
+      </div>
+    </div>
+    <div class="cp-divider"></div>
+    <button class="run-btn" id="runBtn" onclick="startBenchmark()">▶ Run Benchmark</button>
+    <div class="last-run-info" id="lastRunInfo">
+      Last run: <span>—</span><br>
+      CSV modified: <span>—</span>
+    </div>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-header">
+      <span class="progress-title">Benchmark running…</span>
+      <span class="progress-pct" id="progressPct">0%</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    <div class="progress-log" id="progressLog"></div>
+  </div>
+
+  <!-- ERROR -->
+  <div class="err-banner" id="errBanner"></div>
+
+  <!-- NO DATA STATE -->
+  <div class="no-data" id="noDataState" style="display:none;">
+    <div class="nd-icon">📂</div>
+    <h3>No results.csv found</h3>
+    <p>Click <strong>Run Benchmark</strong> above to execute the C++ benchmark. Make sure you have built the project first (F7 in VSCode).</p>
+  </div>
+
+  <!-- MAIN CONTENT -->
+  <div id="mainContent">
+
+    <!-- OVERVIEW -->
+    <section id="overview">
+      <div class="section-label">01 — Overview</div>
+      <h2>At a Glance</h2>
+      <p class="section-desc">Live metrics from your most recent benchmark run. Values update automatically when a new benchmark completes.</p>
+      <div class="metrics-grid" id="metricsGrid">
+        <div class="mc k"><div class="mc-label">Loading</div><div class="mc-val loading">—</div></div>
+        <div class="mc k"><div class="mc-label">Loading</div><div class="mc-val loading">—</div></div>
+        <div class="mc k"><div class="mc-label">Loading</div><div class="mc-val loading">—</div></div>
+        <div class="mc d"><div class="mc-label">Loading</div><div class="mc-val loading">—</div></div>
+        <div class="mc d"><div class="mc-label">Loading</div><div class="mc-val loading">—</div></div>
+        <div class="mc d"><div class="mc-label">Loading</div><div class="mc-val loading">—</div></div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- PERFORMANCE -->
+    <section id="performance">
+      <div class="section-label">02 — Performance</div>
+      <h2>Execution Time Charts</h2>
+      <p class="section-desc">All charts use your live CSV data. Mean times in microseconds (µs); error bars show standard deviation.</p>
+
+      <div class="cc">
+        <div class="cc-title">Kyber vs Dilithium — All Operations</div>
+        <div class="cc-sub">Grouped by operation phase. Dilithium Sign dominates scale — both rendered on the same axis.</div>
+        <div class="legend">
+          <div class="li"><span class="ls" style="background:var(--kyber-t)"></span>Kyber (KEM)</div>
+          <div class="li"><span class="ls" style="background:var(--dil-t)"></span>Dilithium (Signature)</div>
+        </div>
+        <div style="position:relative;width:100%;height:300px;">
+          <canvas id="mainChart" role="img" aria-label="Grouped bar chart of Kyber vs Dilithium execution times">Loading benchmark data…</canvas>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="cc">
+          <div class="cc-title">Kyber — Per Operation</div>
+          <div class="cc-sub">KeyGen · Encapsulate · Decapsulate</div>
+          <div style="position:relative;width:100%;height:220px;">
+            <canvas id="kyberChart" role="img" aria-label="Kyber operations timing">Loading…</canvas>
+          </div>
+        </div>
+        <div class="cc">
+          <div class="cc-title">Dilithium — Per Operation</div>
+          <div class="cc-sub">KeyGen · Sign · Verify</div>
+          <div style="position:relative;width:100%;height:220px;">
+            <canvas id="dilChart" role="img" aria-label="Dilithium operations timing">Loading…</canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="cc">
+        <div class="cc-title">Variability — Min to Max Range</div>
+        <div class="cc-sub">Floating bars show the spread across all runs. A tighter range means more consistent performance.</div>
+        <div style="position:relative;width:100%;height:240px;">
+          <canvas id="varChart" role="img" aria-label="Variability min-max range per operation">Loading…</canvas>
+        </div>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ALGORITHMS -->
+    <section id="algorithms">
+      <div class="section-label">03 — Algorithms</div>
+      <h2>How Each Algorithm Works</h2>
+      <p class="section-desc">Both are built on Module-LWE in polynomial rings Z<sub>q</sub>[X]/(X<sup>N</sup>+1), but they serve different cryptographic purposes.</p>
+
+      <div class="algo-grid">
+        <div class="algo-card">
+          <div class="algo-name" style="color:var(--kyber-t)">CRYSTALS-Kyber</div>
+          <div class="algo-type">Key Encapsulation Mechanism · FIPS 203 · Kyber-512</div>
+          <div class="step"><span class="snum k">1</span><span><strong style="color:var(--text);font-style:normal;">Key Generation</strong> — Sample secret s and error e. Compute public key t = As + e from random matrix A.</span></div>
+          <div class="step"><span class="snum k">2</span><span><strong style="color:var(--text);font-style:normal;">Encapsulate</strong> — Encrypt a random message using the public key. Output: ciphertext (u, v) + shared secret.</span></div>
+          <div class="step"><span class="snum k">3</span><span><strong style="color:var(--text);font-style:normal;">Decapsulate</strong> — Use private key s to recover the message from ciphertext: w = v − sᵀu → shared secret.</span></div>
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;font-style:italic;color:var(--text2);">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);font-style:normal;letter-spacing:.06em;text-transform:uppercase;">Use Case</span><br/>
+            TLS key exchange · VPNs · Secure channels
+          </div>
+        </div>
+        <div class="algo-card">
+          <div class="algo-name" style="color:var(--dil-t)">CRYSTALS-Dilithium</div>
+          <div class="algo-type">Digital Signature Scheme · FIPS 204 · Dilithium2</div>
+          <div class="step"><span class="snum d">1</span><span><strong style="color:var(--text);font-style:normal;">Key Generation</strong> — Sample small secret vectors s₁, s₂. Public key t = As₁ + s₂.</span></div>
+          <div class="step"><span class="snum d">2</span><span><strong style="color:var(--text);font-style:normal;">Sign</strong> — Sample masking vector y. Compute challenge c from high bits of Ay. Signature z = y + cs₁ with hint bits.</span></div>
+          <div class="step"><span class="snum d">3</span><span><strong style="color:var(--text);font-style:normal;">Verify</strong> — Recompute Az, check high bits match challenge hash, verify norm bound on z.</span></div>
+          <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;font-style:italic;color:var(--text2);">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);font-style:normal;letter-spacing:.06em;text-transform:uppercase;">Use Case</span><br/>
+            Document signing · Firmware auth · Certificates
+          </div>
+        </div>
+      </div>
+
+      <div class="cc">
+        <div class="cc-title">Key &amp; Artifact Sizes</div>
+        <div class="cc-sub">From your live benchmark run. Bars are scaled relative to the largest artifact.</div>
+        <table class="size-table" id="sizeTable">
+          <thead><tr><th style="width:150px">Artifact</th><th style="width:90px">Algorithm</th><th style="width:80px">Size</th><th>Relative scale</th></tr></thead>
+          <tbody id="sizeTbody">
+            <tr><td colspan="4" style="color:var(--text3);text-align:center;padding:20px 0;font-style:italic;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- COMPARISON -->
+    <section id="comparison">
+      <div class="section-label">04 — Comparison</div>
+      <h2>Head-to-Head Summary</h2>
+      <p class="section-desc">Live computed ratios based on your actual benchmark results.</p>
+      <div class="cc">
+        <table class="cmp-table">
+          <thead><tr><th>Metric</th><th>Kyber (KEM)</th><th>Dilithium (Sig)</th><th>Winner</th></tr></thead>
+          <tbody id="cmpTbody">
+            <tr><td colspan="4" style="color:var(--text3);text-align:center;padding:20px 0;font-style:italic;">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="divider"></div>
+
+    <!-- ANALYSIS -->
+    <section>
+      <div class="section-label">05 — Analysis</div>
+      <h2>Key Findings</h2>
+      <p class="section-desc">Interpretation of your benchmark results — useful for the IEEE report analysis section.</p>
+      <div class="ag">
+        <div class="ac"><div class="ac-icon" style="background:rgba(13,148,136,.12)">🚀</div><h3>Why Kyber is faster</h3><p>Kyber performs one matrix multiply per operation. Signing builds a 1024-element challenge from polynomial coefficients plus up to 10 fixed-point iterations — structurally heavier.</p></div>
+        <div class="ac"><div class="ac-icon" style="background:rgba(217,119,6,.12)">⏱</div><h3>Why Sign is slow</h3><p>Dilithium's signing constructs a large challenge string, runs convergence iterations on w₁, and checks hint-bit norms — all using O(N²) schoolbook polynomial multiplication.</p></div>
+        <div class="ac"><div class="ac-icon" style="background:rgba(232,197,71,.1)">📐</div><h3>O(N²) vs NTT</h3><p>This educational implementation uses schoolbook poly-mul (65,536 ops per multiply). Production implementations use NTT — O(N log N) — achieving a 10–100× speedup on the same hardware.</p></div>
+        <div class="ac"><div class="ac-icon" style="background:rgba(90,181,133,.1)">🔒</div><h3>Security model</h3><p>Kyber achieves IND-CCA2 (adaptive chosen-ciphertext secure). Dilithium achieves EUF-CMA (existentially unforgeable). These are the gold standards for KEM and signature schemes.</p></div>
+        <div class="ac"><div class="ac-icon" style="background:rgba(224,90,74,.1)">📦</div><h3>Key size trade-off</h3><p>Dilithium's ~4× larger keys embed more information for signature binding. Both are practical — Kyber replaces RSA-2048 in TLS; Dilithium replaces ECDSA in PKI.</p></div>
+        <div class="ac"><div class="ac-icon" style="background:rgba(13,148,136,.1)">🌐</div><h3>Complementary, not competing</h3><p>Kyber handles confidentiality (key exchange), Dilithium handles authenticity (signatures). A complete post-quantum system uses both — they are designed to work together.</p></div>
+      </div>
+      <div style="margin-top:22px;background:var(--accent-l);border:1px solid rgba(232,197,71,.22);border-radius:var(--rad);padding:18px 20px;">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--accent);margin-bottom:8px;letter-spacing:.1em;text-transform:uppercase;">⚠ Implementation Note</div>
+        <p style="font-size:13px;font-style:italic;color:var(--text2);line-height:1.7;">This is an <strong style="color:var(--text);font-style:normal;">educational implementation</strong> using naive O(N²) poly-mul and toy hash functions. For production, use <strong style="color:var(--text);font-style:normal;">liboqs</strong>, <strong style="color:var(--text);font-style:normal;">PQClean</strong>, or the NIST reference implementations. Relative ratios between algorithms are valid; absolute timings are not representative of production performance.</p>
+      </div>
+    </section>
+
+  </div><!-- /mainContent -->
+</div><!-- /wrap -->
+
+<footer class="z">
+  <div class="wrap">
+    <p>PQC Benchmark · <span>Anum (Lead) · Dania (Dev) · Hafsa (Doc)</span> · 2026</p>
+    <p style="margin-top:5px">CRYSTALS-Kyber FIPS 203 · CRYSTALS-Dilithium FIPS 204 · Flask + Chart.js</p>
+  </div>
+</footer>
+
+<script>
+const API = 'http://localhost:5000/api';
+const REFRESH_INTERVAL = 5000;
+
+let charts = { main: null, kyber: null, dil: null, var: null };
+
+const KYBER_C  = '#0d9488';
+const KYBER_BG = 'rgba(13,148,136,0.2)';
+const DIL_C    = '#d97706';
+const DIL_BG   = 'rgba(217,119,6,0.2)';
+const GRID     = 'rgba(255,255,255,0.05)';
+const TICK     = '#504d44';
+
+const baseOpts = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: {
+      backgroundColor: '#1b1b18',
+      borderColor: 'rgba(255,255,255,0.1)',
+      borderWidth: 1,
+      titleColor: '#f0ede6',
+      bodyColor: '#9a9580',
+      padding: 10,
+      titleFont: { family: 'Syne, sans-serif', weight: '600' },
+      bodyFont:  { family: 'JetBrains Mono, monospace', size: 11 },
+    }
+  },
+  scales: {
+    x: { ticks: { color: TICK, font: { size: 11, family: 'JetBrains Mono, monospace' } }, grid: { color: GRID } },
+    y: { ticks: { color: TICK, font: { size: 11, family: 'JetBrains Mono, monospace' }, callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v }, grid: { color: GRID } }
+  }
+};
+
+function fmt(n)   { return Math.round(n).toLocaleString(); }
+function fmtUs(n) { return fmt(n) + ' µs'; }
+
+function setStatus(state, text) {
+  const dot  = document.getElementById('statusDot');
+  const span = document.getElementById('statusText');
+  dot.className = 'status-dot ' + (state === 'ok' ? 'ok' : state === 'running' ? 'running' : state === 'err' ? 'err' : '');
+  span.textContent = text;
+}
+
+let ringTimer = null;
+function startRing() {
+  const arc = document.getElementById('arcEl');
+  const circ = 2 * Math.PI * 7.5;
+  arc.style.strokeDasharray  = circ;
+  arc.style.strokeDashoffset = circ;
+  arc.style.transition = 'none';
+  requestAnimationFrame(() => {
+    arc.style.transition = `stroke-dashoffset ${REFRESH_INTERVAL}ms linear`;
+    arc.style.strokeDashoffset = 0;
+  });
+}
+
+async function startBenchmark() {
+  const runs = parseInt(document.getElementById('runsInput').value) || 50;
+  const btn  = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Running…';
+  showProgress(true);
+  try {
+    const res = await fetch(`${API}/run`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ runs })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      showError(err.error || 'Failed to start benchmark');
+    }
+  } catch(e) {
+    showError('Cannot reach server at localhost:5000. Is server.py running?');
+    btn.disabled = false;
+    btn.textContent = '▶ Run Benchmark';
+    showProgress(false);
+  }
+}
+
+function setRuns(n) {
+  document.getElementById('runsInput').value = n;
+  document.querySelectorAll('.preset-btn').forEach(b => {
+    b.classList.toggle('active', parseInt(b.textContent) === n);
+  });
+}
+
+function showProgress(visible) {
+  document.getElementById('progressWrap').classList.toggle('visible', visible);
+}
+
+function updateProgress(pct, log) {
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = Math.round(pct) + '%';
+  const logEl = document.getElementById('progressLog');
+  logEl.innerHTML = log.slice(-12).join('<br>');
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function showError(msg) {
+  const el = document.getElementById('errBanner');
+  if (msg) { el.textContent = '⚠ ' + msg; el.classList.add('visible'); }
+  else       { el.classList.remove('visible'); }
+}
+
+function renderMetrics(kyber, dil) {
+  const grid = document.getElementById('metricsGrid');
+  grid.innerHTML = '';
+  const allRows = [
+    ...kyber.map(r => ({ ...r, cls: 'k' })),
+    ...dil.map(r   => ({ ...r, cls: 'd' })),
+  ];
+  allRows.forEach(r => {
+    grid.innerHTML += `
+      <div class="mc ${r.cls}">
+        <div class="mc-label">${r.algorithm} ${r.operation}</div>
+        <div class="mc-val ${r.cls}">${fmt(r.mean_us)}</div>
+        <div class="mc-sub">µs · ±${fmt(r.stddev_us)} σ</div>
+      </div>`;
+  });
+}
+
+function destroyChart(key) {
+  if (charts[key]) { charts[key].destroy(); charts[key] = null; }
+}
+
+function renderMainChart(kyber, dil) {
+  destroyChart('main');
+  const kkg  = kyber.find(r => r.operation === 'KeyGen')?.mean_us      || 0;
+  const kenc = kyber.find(r => r.operation === 'Encapsulate')?.mean_us  || 0;
+  const kdec = kyber.find(r => r.operation === 'Decapsulate')?.mean_us  || 0;
+  const dkg  = dil.find(r => r.operation === 'KeyGen')?.mean_us         || 0;
+  const dsig = dil.find(r => r.operation === 'Sign')?.mean_us            || 0;
+  const dver = dil.find(r => r.operation === 'Verify')?.mean_us          || 0;
+  charts.main = new Chart(document.getElementById('mainChart'), {
+    type: 'bar',
+    data: {
+      labels: ['KeyGen', 'Enc / Sign', 'Dec / Verify'],
+      datasets: [
+        { label: 'Kyber',     data: [kkg, kenc, kdec], backgroundColor: KYBER_BG, borderColor: KYBER_C, borderWidth: 2, borderRadius: 4 },
+        { label: 'Dilithium', data: [dkg, dsig, dver], backgroundColor: DIL_BG,   borderColor: DIL_C,   borderWidth: 2, borderRadius: 4 },
+      ]
+    },
+    options: { ...baseOpts, plugins: { ...baseOpts.plugins, tooltip: { ...baseOpts.plugins.tooltip, callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} µs` } } } }
+  });
+}
+
+function renderSingleChart(canvasId, key, rows, ops, color, bg) {
+  destroyChart(key);
+  const data  = ops.map(op => rows.find(r => r.operation === op)?.mean_us || 0);
+  charts[key] = new Chart(document.getElementById(canvasId), {
+    type: 'bar',
+    data: { labels: ops, datasets: [{ data, backgroundColor: bg, borderColor: color, borderWidth: 2, borderRadius: 4 }] },
+    options: { ...baseOpts, plugins: { ...baseOpts.plugins, tooltip: { ...baseOpts.plugins.tooltip, callbacks: { label: ctx => ` ${fmt(ctx.parsed.y)} µs` } } } }
+  });
+}
+
+function renderVarChart(kyber, dil) {
+  destroyChart('var');
+  const rows = [
+    ...kyber.map(r => ({ ...r, color: KYBER_C, bg: KYBER_BG })),
+    ...dil.map(r   => ({ ...r, color: DIL_C,   bg: DIL_BG   })),
+  ];
+  charts.var = new Chart(document.getElementById('varChart'), {
+    type: 'bar',
+    data: {
+      labels: rows.map(r => r.algorithm + '\n' + r.operation),
+      datasets: [{
+        data: rows.map(r => [r.min_us, r.max_us]),
+        backgroundColor: rows.map(r => r.bg),
+        borderColor:     rows.map(r => r.color),
+        borderWidth: 2, borderRadius: 4,
+      }]
+    },
+    options: { ...baseOpts, plugins: { ...baseOpts.plugins, tooltip: { ...baseOpts.plugins.tooltip, callbacks: { label: ctx => { const [mn,mx] = ctx.parsed; return ` ${fmt(mn)} – ${fmt(mx)} µs`; } } } }, scales: { ...baseOpts.scales, x: { ...baseOpts.scales.x, ticks: { color: TICK, font: { size: 10, family: 'JetBrains Mono, monospace' }, maxRotation: 0 } } } }
+  });
+}
+
+function renderSizeTable(kyber, dil) {
+  const rows = [
+    { label: 'Public Key',       algo: 'Kyber',     size: kyber.find(r => r.operation === 'KeyGen')?.keysize_bytes        || 0, cls: 'k', c: KYBER_C },
+    { label: 'Public Key',       algo: 'Dilithium', size: dil.find(r => r.operation === 'KeyGen')?.keysize_bytes           || 0, cls: 'd', c: DIL_C   },
+    { label: 'Private Key',      algo: 'Kyber',     size: kyber.find(r => r.operation === 'Decapsulate')?.keysize_bytes    || 0, cls: 'k', c: KYBER_C },
+    { label: 'Ciphertext / Sig', algo: 'Kyber',     size: kyber.find(r => r.operation === 'Encapsulate')?.keysize_bytes    || 0, cls: 'k', c: KYBER_C },
+    { label: 'Ciphertext / Sig', algo: 'Dilithium', size: dil.find(r => r.operation === 'Sign')?.keysize_bytes             || 0, cls: 'd', c: DIL_C   },
+  ];
+  const maxSize = Math.max(...rows.map(r => r.size));
+  document.getElementById('sizeTbody').innerHTML = rows.map(r => `
+    <tr>
+      <td style="color:var(--text)">${r.label}</td>
+      <td><span class="mono" style="color:${r.c}">${r.algo}</span></td>
+      <td class="mono" style="color:${r.c}">${r.size.toLocaleString()} B</td>
+      <td style="padding-right:8px"><div class="bar-bg"><div class="bar-fill" style="width:${Math.round(r.size/maxSize*100)}%;background:${r.c}"></div></div></td>
+    </tr>`).join('');
+}
+
+function renderCmp(kyber, dil) {
+  const kkg  = kyber.find(r => r.operation === 'KeyGen');
+  const kenc = kyber.find(r => r.operation === 'Encapsulate');
+  const kdec = kyber.find(r => r.operation === 'Decapsulate');
+  const dkg  = dil.find(r => r.operation === 'KeyGen');
+  const dsig = dil.find(r => r.operation === 'Sign');
+  const dver = dil.find(r => r.operation === 'Verify');
+  if (!kkg || !dkg) return;
+
+  const ratio = (a, b) => {
+    const r = b.mean_us / a.mean_us;
+    return `<span class="badge b-fast">Kyber ${r.toFixed(1)}×</span>`;
+  };
+  const sizeRatio = (a, b) => {
+    const r = b.keysize_bytes / a.keysize_bytes;
+    return `<span class="badge b-fast">Kyber ${r.toFixed(1)}×</span>`;
+  };
+
+  document.getElementById('cmpTbody').innerHTML = `
+    <tr><td>Purpose</td><td style="color:var(--text2)">Key exchange</td><td style="color:var(--text2)">Authentication</td><td>—</td></tr>
+    <tr><td>KeyGen time</td><td><span class="badge b-fast">${fmtUs(kkg.mean_us)}</span></td><td><span class="badge b-slow">${fmtUs(dkg.mean_us)}</span></td><td>${ratio(kkg, dkg)}</td></tr>
+    <tr><td>Core op time</td><td><span class="badge b-fast">${fmtUs(kenc.mean_us)} Enc</span></td><td><span class="badge b-slow">${fmtUs(dsig.mean_us)} Sign</span></td><td>${ratio(kenc, dsig)}</td></tr>
+    <tr><td>Secondary op</td><td><span class="badge b-fast">${fmtUs(kdec.mean_us)} Dec</span></td><td><span class="badge b-slow">${fmtUs(dver.mean_us)} Verify</span></td><td>${ratio(kdec, dver)}</td></tr>
+    <tr><td>Public key size</td><td><span class="badge b-sm">${kkg.keysize_bytes.toLocaleString()} B</span></td><td><span class="badge b-lg">${dkg.keysize_bytes.toLocaleString()} B</span></td><td>${sizeRatio(kkg, dkg)}</td></tr>
+    <tr><td>Ciphertext / Sig</td><td><span class="badge b-sm">${kenc.keysize_bytes.toLocaleString()} B</span></td><td><span class="badge b-lg">${dsig.keysize_bytes.toLocaleString()} B</span></td><td>${sizeRatio(kenc, dsig)}</td></tr>
+    <tr><td>Timing σ (core op)</td><td><span class="badge b-fast">±${fmt(kenc.stddev_us)} µs</span></td><td><span class="badge b-slow">±${fmt(dsig.stddev_us)} µs</span></td><td><span class="badge b-ok">Kyber more consistent</span></td></tr>
+    <tr><td>NIST standard</td><td style="color:var(--text2)">FIPS 203</td><td style="color:var(--text2)">FIPS 204</td><td><span class="badge b-ok">Both ✓</span></td></tr>
+    <tr><td>Quantum resistant</td><td style="color:var(--kyber-t)">✓ MLWE</td><td style="color:var(--dil-t)">✓ MLWE + MSIS</td><td><span class="badge b-ok">Both ✓</span></td></tr>
+  `;
+}
+
+function updateLastRunInfo(status, data) {
+  const el = document.getElementById('lastRunInfo');
+  const lastRun = status.last_run || '—';
+  const csvMod  = data?.last_modified || '—';
+  el.innerHTML = `Last run: <span>${lastRun}</span><br>CSV modified: <span>${csvMod}</span>`;
+}
+
+function renderAll(data) {
+  const { kyber, dilithium } = data;
+  if (!kyber?.length || !dilithium?.length) return;
+  document.getElementById('noDataState').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'block';
+  renderMetrics(kyber, dilithium);
+  renderMainChart(kyber, dilithium);
+  renderSingleChart('kyberChart', 'kyber', kyber,     ['KeyGen','Encapsulate','Decapsulate'], KYBER_C, KYBER_BG);
+  renderSingleChart('dilChart',   'dil',   dilithium, ['KeyGen','Sign','Verify'],              DIL_C,   DIL_BG);
+  renderVarChart(kyber, dilithium);
+  renderSizeTable(kyber, dilithium);
+  renderCmp(kyber, dilithium);
+}
+
+let lastCsvModified = null;
+let pollTimer = null;
+
+async function poll() {
+  try {
+    const statusRes = await fetch(`${API}/status`);
+    if (!statusRes.ok) throw new Error('server error');
+    const status = await statusRes.json();
+
+    if (status.running) {
+      setStatus('running', 'Running…');
+    } else if (status.error) {
+      setStatus('err', 'Error');
+      showError(status.error);
+    } else if (status.exe_found) {
+      setStatus('ok', 'Server ready');
+      showError(null);
+    } else {
+      setStatus('err', 'Exe not found');
+      showError('Build the C++ project first (F7 in VSCode), then try again.');
+    }
+
+    if (status.running) {
+      showProgress(true);
+      updateProgress(status.progress, status.log);
+      document.getElementById('runBtn').disabled = true;
+      document.getElementById('runBtn').textContent = '⏳ Running…';
+    } else {
+      showProgress(false);
+      document.getElementById('runBtn').disabled = false;
+      document.getElementById('runBtn').textContent = '▶ Run Benchmark';
+    }
+
+    const dataRes = await fetch(`${API}/data`);
+    if (dataRes.ok) {
+      const data = await dataRes.json();
+      if (data.last_modified !== lastCsvModified) {
+        lastCsvModified = data.last_modified;
+        renderAll(data);
+        updateLastRunInfo(status, data);
+      }
+    } else {
+      document.getElementById('noDataState').style.display = 'block';
+      document.getElementById('mainContent').style.display = 'none';
+    }
+  } catch(e) {
+    setStatus('err', 'Server offline');
+    showError('Cannot reach server.py at localhost:5000. Start it with: python server.py');
+  }
+  startRing();
+  pollTimer = setTimeout(poll, REFRESH_INTERVAL);
+}
+
+document.getElementById('mainContent').style.display = 'none';
+document.getElementById('noDataState').style.display = 'none';
+poll();
+</script>
+</body>
+</html>
