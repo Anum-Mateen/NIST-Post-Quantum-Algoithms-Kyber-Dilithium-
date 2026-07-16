@@ -1,0 +1,10 @@
+^D:\ANUM-D-DRIVE\4TH YEAR UNI\8. QS\QS_MINI_PROJECT_CCP\BUILD\CMAKEFILES\D3E19F241F6C242CB3427537058D3A60\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" "-SD:/Anum-D-drive/4th year Uni/8. QS/qs_mini_project_ccp" "-BD:/Anum-D-drive/4th year Uni/8. QS/qs_mini_project_ccp/build" --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file "D:/Anum-D-drive/4th year Uni/8. QS/qs_mini_project_ccp/build/qs_mini_project_cpp.sln"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -1,0 +1,3 @@
+D:/Anum-D-drive/4th year Uni/8. QS/qs_mini_project_ccp/build/CMakeFiles/qs_mini_project_cpp.dir
+D:/Anum-D-drive/4th year Uni/8. QS/qs_mini_project_ccp/build/CMakeFiles/ALL_BUILD.dir
+D:/Anum-D-drive/4th year Uni/8. QS/qs_mini_project_ccp/build/CMakeFiles/ZERO_CHECK.dir
