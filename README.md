@@ -410,5 +410,5 @@ The main benchmark system works perfectly without the dashboard server.
 
 ---
 
-*Project by: Anum (Lead) · Dania (Dev) · Hafsa (Doc)*
+*Project by: Anum*
 *For future batches: read `kyber.h` and `dilithium.h` top-to-bottom — every step is commented.*
